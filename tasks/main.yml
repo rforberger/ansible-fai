@@ -1,0 +1,118 @@
+---
+
+- name: Add Fai APt signing key
+  ansible.builtin.apt_key:
+    url: https://fai-project.org/download/2BF8D9FE074BCDE4.gpg
+    state: present
+
+- name: Add Fai Apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb http://fai-project.org/download buster koeln"
+    state: present
+
+- name: Install Fai
+  ansible.builtin.apt:
+    name: fai-quickstart
+    state: present
+
+- name: Configure Fai
+  ansible.builtin.shell:
+    cmd: "{{ item }}"
+  loop:
+    - "sed -i -e 's/^#deb/deb/' /etc/fai/apt/sources.list"
+    - "sed -i -e 's/#LOGUSER/LOGUSER/' /etc/fai/fai.conf"
+
+- name: Test for already bootstrapped Debian in nfsroot
+  ansible.builtin.stat:
+    path: "/srv/fai/nfsroot/etc/debian_version"
+  register: debian_nfsroot
+
+- name: Run fai-setup
+  ansible.builtin.shell:
+    cmd: "fai-setup -v"
+  when: not debian_nfsroot.stat.exists
+
+- name: Write Fai classes file
+  ansible.builtin.template:
+    src: "50-host-classes.j2"
+    dest: "/srv/fai/config/class/50-host-classes"
+
+- name: Write Fai custom script directory and files directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: "{{ item.state }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "/srv/fai/config/scripts/THESRV", state: directory, mode: "0755" }
+    - { path: "/srv/fai/config/scripts/VIRT", state: directory, mode: "0755" }
+    - { path: "/srv/fai/config/scripts/GENTOO", state: directory, mode: "0755" }
+    - { path: "/srv/fai/config/files/home/localadmin/.ssh/authorized_keys", state: directory, mode: "0755" }
+    - { path: "/srv/fai/config/files/gentoo-emerge.sh", state: directory, mode: "0755" }
+
+- name: Write Fai custom scripts and files
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: "10-localadmin-ssh-keys.j2", dest: "/srv/fai/config/scripts/THESRV/10-localadmin-ssh-keys", mode: "0755" }
+    - { src: "05-users.j2", dest: "/srv/fai/config/scripts/THESRV/05-users", mode: "0755" }
+    - { src: "15-sudo.j2", dest: "/srv/fai/config/scripts/THESRV/15-sudo", mode: "0755" }
+    - { src: "20-qemu-agent.j2", dest: "/srv/fai/config/scripts/VIRT/20-qemu-agent", mode: "0755" }
+    - { src: "authorized_keys.j2", dest: "/srv/fai/config/files/home/localadmin/.ssh/authorized_keys/THESRV", mode: "644" }
+    - { src: "10-emerge.j2", dest: "/srv/fai/config/scripts/GENTOO/10-emerge", mode: "0755" }
+    - { src: "gentoo-emerge.sh.j2", dest: "/srv/fai/config/files/gentoo-emerge.sh/GENTOO", mode: "0755" }
+    - { src: "20-grub-gentoo.j2", dest: "/srv/fai/config/scripts/GENTOO/20-grub-gentoo", mode: "0755" }
+    - { src: "60-misc.j2", dest: "/srv/fai/config/class/60-misc", mode: "0755" }
+
+- name: Get stat of GENTOO.tar.xz
+  ansible.builtin.stat:
+    path: "/srv/fai/config/basefiles/GENTOO.tar.xz"
+  register: gentoo
+
+- name: Deploy GENTOO rootfs
+  ansible.builtin.get_url:
+    url: "https://bouncer.gentoo.org/fetch/root/all/releases/amd64/autobuilds/20230212T161657Z/stage3-amd64-systemd-20230212T161657Z.tar.xz"
+    dest: "/srv/fai/config/basefiles/GENTOO.tar.xz"
+  when: not gentoo.stat.exists
+
+- name: Set user attribues in FAIBASE class
+  ansible.builtin.lineinfile:
+    path: "/srv/fai/config/class/FAIBASE.var"
+    line: "{{ item.line }}"
+    regexp: "{{ item.regexp }}"
+  loop:
+    - { line: "ROOTPW='{{ fai.root_pw_hash }}'", regexp: "^ROOTPW=" }
+    - { line: "username=localadmin", regexp: "^username=" }
+    - { line: "USERPW='{{ user_password_localadmin | string | ansible.builtin.password_hash(hashtype='md5') }}'", regexp: "^USERPW=" }
+
+- name: Drop out LAST class on GENTOO class
+  ansible.builtin.lineinfile:
+    path: "/srv/fai/config/scripts/LAST/50-misc"
+    regexp: "^#! /bin/bash"
+    line: "#! /bin/bash\nif ifclass GENTOO; then exit 0; fi"
+    insertafter: "regex"
+    firstmatch: true
+
+- name: Add host to FAI
+  ansible.builtin.shell:
+    cmd: "fai-chboot -IPv -f debug,sshd -u nfs://192.168.1.2/srv/fai/config {{ item.vm_hostname }}"
+  loop: "{{ vms }}"
+
+- name: Add cronjob that deletes the pxelinux.cfg configs
+  ansible.builtin.cron:
+    name: "delete_pxelinux_cfg"
+    backup: yes
+    day: "*"
+    hour: "*"
+    minute: "0"
+    month: "*"
+    weekday: "*"
+    user: "root"
+    job: "find /srv/tftp/fai/pxelinux.cfg ! -iname default -type f -ctime +60 -delete"
+
+
+
+
+
+

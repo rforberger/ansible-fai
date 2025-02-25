@@ -1,0 +1,15 @@
+#! /bin/bash
+
+# assign classes to hosts based on their hostname
+
+# do not use this if a menu will be presented
+[ "$flag_menu" ] && exit 0
+
+# use a list of classes for our demo machine
+case $HOSTNAME in
+    {% for vm in vms %}
+    ip-{{ vm.ip.split(".")[0] }}-{{ vm.ip.split(".")[1] }}-{{ vm.ip.split(".")[2] }}-{{ vm.ip.split(".")[3] }})
+        echo "{{ vm.fai_classes }} THESRV"
+        ;;
+    {% endfor %}
+esac

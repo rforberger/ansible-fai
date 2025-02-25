@@ -1,0 +1,12 @@
+#!/bin/bash
+
+if ifclass DEBIAN; then
+  $ROOTCMD apt update
+  $ROOTCMD apt install -y dbus qemu-guest-agent
+  $ROOTCMD systemctl enable systemd-logind
+elif ifclass GENTOO; then
+  $ROOTCMD emerge app-emulation/qemu-guest-agent
+  $ROOTCMD systemctl enable qemu-guest-agent
+fi
+
+

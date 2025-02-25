@@ -1,0 +1,16 @@
+#!/bin/bash
+
+mkdir /etc/portage/repos.conf
+cat /usr/share/portage/config/repos.conf | grep -v sync-uri > /etc/portage/repos.conf/gentoo.conf
+echo 'sync-uri = rsync://app01.thesrv.de/gentoo-portage' >> /etc/portage/repos.conf/gentoo.conf
+echo 'ACCEPT_LICENSE="*"' >> /etc/portage/make.conf
+mkdir /etc/portage/package.use
+#echo "sys-kernel/gentoo-sources symlink" >> /etc/portage/package.use/gentoo-sources
+emerge --sync
+
+emerge -uD @world
+emerge gentoo-kernel-bin openssh net-misc/dhcpcd
+
+systemctl enable sshd
+systemctl enable dhcpcd
+

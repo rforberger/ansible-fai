@@ -1,0 +1,12 @@
+#! /bin/bash
+
+if ifclass GENTOO; then
+  $ROOTCMD emerge sudo
+elif ifclass DEBIAN; then
+  $ROOTCMD bash -c "apt update && apt install -y sudo"
+else
+  echo "unsupported OS"
+fi
+
+$ROOTCMD bash -c "test -d /etc/sudoers.d || mkdir /etc/sudoers.d"
+$ROOTCMD bash -c "echo 'localadmin   ALL=NOPASSWD: ALL' > /etc/sudoers.d/01-local-sudo-rules"

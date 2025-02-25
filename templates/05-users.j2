@@ -1,0 +1,11 @@
+#!/bin/bash
+# add additional user account
+if [ -n "$username" ]; then
+    if ! $ROOTCMD getent passwd $username ; then
+        $ROOTCMD useradd -m -c "$username user" $username
+        $ROOTCMD usermod -p "$USERPW" $username
+        for g in $groups; do
+            $ROOTCMD gpasswd -a $username $g
+        done
+    fi
+fi
